@@ -1,0 +1,32 @@
+timestamp,type,severity,source_ip,dest_ip,destination_port,username,action,message
+2025-10-20T09:00:01Z,auth,medium,203.0.113.50,,,admin,failed,Failed login for user admin from 203.0.113.50
+2025-10-20T09:00:15Z,auth,medium,203.0.113.50,,,admin,failed,Failed login for user admin from 203.0.113.50
+2025-10-20T09:00:28Z,auth,medium,203.0.113.50,,,admin,failed,Failed login for user admin from 203.0.113.50
+2025-10-20T09:00:42Z,auth,medium,203.0.113.50,,,admin,failed,Failed login for user admin from 203.0.113.50
+2025-10-20T09:00:55Z,auth,medium,203.0.113.50,,,admin,failed,Failed login for user admin from 203.0.113.50
+2025-10-20T09:01:08Z,auth,medium,203.0.113.50,,,admin,failed,Failed login for user admin from 203.0.113.50
+2025-10-20T09:08:00Z,auth,medium,198.51.100.22,,,jsmith,failed,Failed login for user jsmith from 198.51.100.22
+2025-10-20T09:08:20Z,auth,medium,198.51.100.22,,,jsmith,failed,Failed login for user jsmith from 198.51.100.22
+2025-10-20T09:08:45Z,auth,medium,198.51.100.22,,,jsmith,failed,Failed login for user jsmith from 198.51.100.22
+2025-10-20T09:09:10Z,auth,high,198.51.100.22,,,jsmith,success,Successful login for user jsmith after multiple failures
+2025-10-20T09:15:00Z,firewall,low,172.16.0.100,8.8.4.4,443,,allow,Firewall allowed outbound connection from 172.16.0.100 to 8.8.4.4 on port 443
+2025-10-20T09:15:12Z,dns,medium,172.16.0.100,,,,query,DNS query from 172.16.0.100 for c2-server-exfil.xyz
+2025-10-20T09:15:25Z,http,medium,172.16.0.100,104.16.248.249,443,,request,GET /admin/config from 172.16.0.100 to 104.16.248.249:443 returned 403
+2025-10-20T09:22:00Z,firewall,high,172.16.0.100,10.0.0.50,3389,,blocked,Firewall blocked RDP connection from 172.16.0.100 to 10.0.0.50:3389
+2025-10-20T09:28:15Z,network,low,172.16.0.100,10.0.0.8,443,,established,TCP connection established from 172.16.0.100 to 10.0.0.8:443
+2025-10-20T09:35:00Z,firewall,low,10.0.2.88,8.8.4.4,443,,allow,Firewall allowed outbound connection from 10.0.2.88 to 8.8.4.4 on port 443
+2025-10-20T09:35:30Z,firewall,low,10.0.2.88,8.8.8.8,443,,allow,Firewall allowed outbound connection from 10.0.2.88 to 8.8.8.8 on port 443
+2025-10-20T09:36:00Z,dns,low,10.0.2.88,,,,query,DNS query from 10.0.2.88 for cloudflare.com
+2025-10-20T09:36:30Z,http,low,10.0.2.88,104.16.248.249,443,,request,GET / from 10.0.2.88 to 104.16.248.249:443 returned 200
+2025-10-20T10:00:00Z,malware,critical,10.0.0.25,,,alice,detected,Ransomware activity detected from 10.0.0.25 to 192.0.2.100:4443
+2025-10-20T10:05:00Z,dns,high,10.0.0.25,,,alice,query,DNS query from 10.0.0.25 for malware-c2.evil resolved to known bad IP
+2025-10-20T10:10:00Z,system,medium,10.0.0.25,,,alice,exec,Sysmon process create: powershell.exe -enc from 10.0.0.25
+2025-10-20T10:12:00Z,auth,low,10.0.1.66,10.0.0.2,22,bob,success,SSH login for user bob from 10.0.1.66 to 10.0.0.2:22
+2025-10-20T10:20:00Z,firewall,high,203.0.113.50,10.0.0.5,443,,blocked,Firewall blocked inbound connection from 203.0.113.50 to 10.0.0.5:443
+2025-10-20T10:25:00Z,http,high,198.51.100.22,10.0.0.8,8080,,request,GET /api/internal from 198.51.100.22 to 10.0.0.8:8080 returned 401
+2025-10-20T10:30:00Z,email,low,10.0.0.4,,,charlie,sent,SMTP relay from 10.0.0.4 to 192.0.2.50:25 - outbound bulk mail
+2025-10-20T10:45:00Z,auth,medium,172.16.0.55,,,dave,failed,Failed login for user dave from 172.16.0.55
+2025-10-20T10:45:30Z,auth,medium,172.16.0.55,,,dave,failed,Failed login for user dave from 172.16.0.55
+2025-10-20T11:00:00Z,firewall,medium,10.0.1.234,192.0.78.12,443,,allow,Firewall allowed outbound connection from 10.0.1.234 to 192.0.78.12 on port 443
+2025-10-20T11:05:00Z,dns,medium,10.0.1.234,,,,query,Host 10.0.1.234 resolved suspicious-domain.example
+2025-10-20T11:10:00Z,http,medium,10.0.1.234,208.67.222.222,443,,request,POST /api/upload from 10.0.1.234 to 208.67.222.222:443 returned 200

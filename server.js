@@ -7,6 +7,73 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+/** Extract destination IP and port from message or other text when not in dedicated fields. */
+function extractDestAndPort(text) {
+  if (!text || typeof text !== 'string') return { destIp: null, port: null };
+  const t = text.trim();
+  const result = { destIp: null, port: null };
+
+  const ipv4 = /\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g;
+  const ipPort = /\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{2,5})\b/;
+  const portOnly = /(?:port|:)\s*(\d{2,5})\b/i;
+
+  const ipPortMatch = t.match(ipPort);
+  if (ipPortMatch) {
+    result.destIp = ipPortMatch[1];
+    result.port = ipPortMatch[2];
+    return result;
+  }
+
+  const destKeyword = /(?:to|destination|dest|dst)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i.exec(t);
+  if (destKeyword) result.destIp = destKeyword[1];
+
+  const portMatch = t.match(portOnly);
+  if (portMatch) result.port = portMatch[1];
+
+  if (!result.destIp) {
+    const ips = t.match(ipv4);
+    if (ips && ips.length >= 2) result.destIp = ips[1];
+    else if (ips && ips.length === 1) result.destIp = ips[0];
+  }
+
+  return result;
+}
+
+/** Infer event type from message, action, and other common log fields when type is not set. */
+function inferEventType(e) {
+  const text = [
+    e.message,
+    e.msg,
+    e.alert,
+    e.description,
+    e.action,
+    e.outcome,
+    e.event_action,
+    e.log,
+    e.details,
+    e.event_category,
+    e.event_type,
+    e.kind
+  ]
+    .filter(Boolean)
+    .map((x) => String(x).toLowerCase())
+    .join(' ');
+
+  if (!text) return null;
+
+  if (/\b(auth|login|logout|logon|logoff|ssh|ldap|kerberos|password|credential|session|failed log|successful log)\b/.test(text)) return 'auth';
+  if (/\b(firewall|block|dropped|denied|allowed|acl|iptables|nfw)\b/.test(text)) return 'firewall';
+  if (/\b(dns|query|resolution|lookup|nxdomain)\b/.test(text)) return 'dns';
+  if (/\b(http|request|response|get |post |url|4\d{2}|5\d{2})\b/.test(text)) return 'http';
+  if (/\b(file|upload|download|read|write|access|created|deleted|modified)\b/.test(text)) return 'file';
+  if (/\b(network|connection|port|socket|tcp|udp|icmp)\b/.test(text)) return 'network';
+  if (/\b(email|smtp|mail|sendmail)\b/.test(text)) return 'email';
+  if (/\b(malware|virus|threat|alert|detection|ransomware|phish)\b/.test(text)) return 'alert';
+  if (/\b(registry|process|exec|sysmon)\b/.test(text)) return 'system';
+
+  return null;
+}
+
 function normalizeEvents(events) {
   return events
     .filter(Boolean)
@@ -16,9 +83,22 @@ function normalizeEvents(events) {
       const ts = e.timestamp || e.time || e['@timestamp'];
       const date = ts ? new Date(ts) : null;
 
-      const type =
-        (e.type || e.log_type || e.category || '').toString().toLowerCase() ||
-        'unknown';
+      const typeFromFields = (
+        e.type ||
+        e.log_type ||
+        e.category ||
+        e.event_type ||
+        e.kind ||
+        e.event_type_name ||
+        e.event_name ||
+        e.event_category ||
+        ''
+      )
+        .toString()
+        .trim()
+        .toLowerCase();
+
+      const type = typeFromFields || inferEventType(e) || 'general';
 
       const sourceIp =
         e.source_ip ||
@@ -28,7 +108,7 @@ function normalizeEvents(events) {
         e.source ||
         null;
 
-      const destIp =
+      let destIp =
         e.dest_ip ||
         e.destination_ip ||
         e.dst_ip ||
@@ -39,7 +119,7 @@ function normalizeEvents(events) {
       const username = e.username || e.user || e.account || null;
       const domain = e.domain || e.hostname || e.fqdn || null;
 
-      const destPort =
+      let destPort =
         e.dest_port || e.dport || e.destination_port || e.port || null;
 
       const action =
@@ -63,6 +143,13 @@ function normalizeEvents(events) {
         e.detail ||
         e.info ||
         '';
+
+      const textForExtract = [message, e.details, e.message, e.msg].filter(Boolean).join(' ');
+      if (!destIp || !destPort) {
+        const extracted = extractDestAndPort(textForExtract);
+        if (!destIp && extracted.destIp) destIp = extracted.destIp;
+        if (!destPort && extracted.port) destPort = extracted.port;
+      }
 
       const severityRaw =
         (e.severity || e.level || e.priority || e.severity_label || '').toString();

@@ -33,20 +33,40 @@ function parseCsv(text) {
   }
 
   const headerLine = lines[0];
-  const headers = splitCsvLine(headerLine).map((h) => h.trim());
+  const useTabs = headerLine.includes('\t');
+  const splitFn = useTabs ? (line) => line.split(/\t+/).map((c) => c.trim()) : splitCsvLine;
+  const headers = splitFn(headerLine).map((h) => h.trim());
 
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = splitCsvLine(lines[i]);
+    const cols = splitFn(lines[i]);
     if (cols.length === 1 && cols[0] === '') continue;
 
     const row = {};
     headers.forEach((h, idx) => {
       row[h] = cols[idx] !== undefined ? cols[idx] : '';
     });
-    rows.push(row);
+    rows.push(normalizeEventRow(row));
   }
   return rows;
+}
+
+/** Map common column names to app format and add type, severity, message when missing. */
+function normalizeEventRow(row) {
+  const out = { ...row };
+  if (row.destination_ip && !row.dest_ip) out.dest_ip = row.destination_ip;
+  if (row.destination_port && !row.dest_port) out.dest_port = row.destination_port;
+  if (!out.type && (row.action || out.dest_ip)) out.type = 'firewall';
+  if (!out.severity) out.severity = out.action?.toLowerCase() === 'block' ? 'high' : 'low';
+  const src = out.source_ip || row.source_ip || '';
+  const dest = out.dest_ip || out.destination_ip || '';
+  const port = out.dest_port || out.destination_port || '';
+  if (!out.message && (src || dest)) {
+    out.message = port
+      ? `Firewall ${(out.action || 'allowed').toLowerCase()} outbound connection from ${src} to ${dest} on port ${port}`
+      : `Firewall ${(out.action || 'allowed').toLowerCase()} connection from ${src} to ${dest}`;
+  }
+  return out;
 }
 
 function splitCsvLine(line) {
@@ -85,7 +105,7 @@ fileInput.addEventListener('change', () => {
 
   const name = file.name.toLowerCase();
   const isExcel = name.endsWith('.xlsx') || name.endsWith('.xls');
-  const isCsv = name.endsWith('.csv');
+  const isCsv = name.endsWith('.csv') || name.endsWith('.tsv');
 
   if (!isExcel && !isCsv) {
     parsedEvents = [];
@@ -392,7 +412,7 @@ function renderTimeline(events) {
 
     type.appendChild(sevDot);
     type.appendChild(
-      document.createTextNode((e.type || 'unknown').toUpperCase())
+      document.createTextNode((e.type || 'general').toUpperCase())
     );
 
     const actor = document.createElement('div');
@@ -442,6 +462,20 @@ function formatTimeAmPm(d) {
   return `${h}:${pad(m)}:${pad(s)} ${ampm}`;
 }
 
+function extractDestFromMessage(msg) {
+  if (!msg || typeof msg !== 'string') return null;
+  const ipPort = msg.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?::\d{2,5})?\b/);
+  if (ipPort) return ipPort[1];
+  const toIp = /(?:to|destination|dest)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i.exec(msg);
+  return toIp ? toIp[1] : null;
+}
+
+function extractPortFromMessage(msg) {
+  if (!msg || typeof msg !== 'string') return null;
+  const withPort = msg.match(/(?::|\bport\s+)(\d{2,5})\b/i);
+  return withPort ? withPort[1] : null;
+}
+
 function renderEventDetails(event, row) {
   if (!eventDetailsEl) return;
 
@@ -473,9 +507,10 @@ function renderEventDetails(event, row) {
     event.domain ||
     '(unknown)';
 
+  const destDisplay = event.destIp || extractDestFromMessage(event.message) || 'n/a';
   const port =
     event.destPort ||
-    ((event.message || '').match(/:(\d{2,5})\b/) || [])[1] ||
+    extractPortFromMessage(event.message) ||
     'Not observed';
 
   const measures = getPreventiveMeasures(event);
@@ -492,18 +527,20 @@ function renderEventDetails(event, row) {
   eventDetailsEl.innerHTML = `
     <h3 class="event-details-title">Event overview</h3>
     <div class="event-details-meta">
-      <strong>${(event.type || 'unknown').toUpperCase()}</strong>
+      <strong>${(event.type || 'general').toUpperCase()}</strong>
       &nbsp;&bull;&nbsp;
       Severity: ${(event.severity || 'unknown').toUpperCase()}<br/>
       Time: ${timeText}<br/>
       Actor: ${actor}<br/>
       Source: ${event.sourceIp || 'n/a'} &nbsp;&bull;&nbsp;
-      Destination: ${event.destIp || 'n/a'} &nbsp;&bull;&nbsp;
+      Destination: ${destDisplay} &nbsp;&bull;&nbsp;
       Port: ${port}
     </div>
     <div class="event-details-chip-row">
       <span class="event-details-chip">User: ${event.username || 'n/a'}</span>
-      <span class="event-details-chip">Type: ${(event.type || 'unknown').toUpperCase()}</span>
+      <span class="event-details-chip">Type: ${(event.type || 'general').toUpperCase()}</span>
+      <span class="event-details-chip">Destination: ${destDisplay}</span>
+      <span class="event-details-chip">Port: ${port}</span>
     </div>
     <div class="event-details-section-title">Raw message</div>
     <p>${event.message || '(none)'}</p>
