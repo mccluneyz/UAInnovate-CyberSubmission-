@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SOC Attack Narrative Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>SOC Attack Narrative</h1>
+        <p class="subtitle">
+          Upload raw security logs and get a 30-second view of coordinated attacks.
+        </p>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="panel panel-upload">
+        <h2>1. Upload log data (CSV or Excel)</h2>
+        <p class="muted">
+          Upload a CSV or Excel <code>.xlsx</code> file. The first row should be headers like
+          <code>timestamp</code>, <code>type</code>, <code>severity</code>,
+          <code>source_ip</code>, <code>dest_ip</code>, <code>username</code>,
+          <code>action</code>, <code>message</code>.
+        </p>
+        <div class="upload-controls">
+          <input
+            type="file"
+            id="file-input"
+            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+          />
+          <button id="analyze-btn" disabled>Analyze Logs</button>
+        </div>
+        <div id="upload-status" class="status"></div>
+      </section>
+
+      <section class="panel panel-summary">
+        <h2>2. Attack summary</h2>
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="label">Total events</div>
+            <div id="summary-total" class="value">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="label">Time range</div>
+            <div id="summary-range" class="value">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="label">Top severity</div>
+            <div id="summary-top-severity" class="value">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="label">Highest campaign score</div>
+            <div id="summary-top-campaign" class="value">-</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel panel-flex">
+        <div class="panel-column">
+          <h2>3. Key indicators</h2>
+          <ul id="indicators-list" class="list"></ul>
+        </div>
+        <div class="panel-column">
+          <h2>4. Suspected campaigns</h2>
+          <div id="campaigns-list" class="campaigns"></div>
+        </div>
+      </section>
+
+      <section class="panel panel-timeline">
+        <h2>5. Event timeline</h2>
+        <div class="timeline-layout">
+          <div id="timeline" class="timeline"></div>
+          <aside id="event-details" class="event-details">
+            <h3 class="event-details-title">Event details</h3>
+            <p class="event-details-empty">
+              Click an event in the timeline to see an overview, ports involved, recommended preventive measures, and similar attacks to watch for.
+            </p>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <span>Tip: Focus on high-score campaigns and suspicious authentication patterns first.</span>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+  </html>
+

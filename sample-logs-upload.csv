@@ -1,0 +1,10 @@
+timestamp,type,severity,source_ip,dest_ip,username,action,message
+2026-02-28T12:00:01Z,auth,medium,203.0.113.10,,alice,failed,Failed login for user alice from 203.0.113.10
+2026-02-28T12:00:12Z,auth,medium,203.0.113.10,,alice,failed,Failed login for user alice from 203.0.113.10
+2026-02-28T12:00:24Z,auth,medium,203.0.113.10,,alice,failed,Failed login for user alice from 203.0.113.10
+2026-02-28T12:00:36Z,auth,medium,203.0.113.10,,alice,failed,Failed login for user alice from 203.0.113.10
+2026-02-28T12:00:48Z,auth,medium,203.0.113.10,,alice,failed,Failed login for user alice from 203.0.113.10
+2026-02-28T12:05:10Z,auth,high,203.0.113.10,,alice,success,Successful login for user alice after multiple failures
+2026-02-28T12:06:30Z,firewall,high,203.0.113.10,10.0.0.5,,allowed,Inbound connection from 203.0.113.10 to 10.0.0.5:443
+2026-02-28T12:07:02Z,dns,medium,10.0.0.5,,alice,query,Host 10.0.0.5 resolved suspicious-domain.example
+2026-02-28T12:08:15Z,malware,critical,10.0.0.5,,alice,detected,Malware beacon detected from 10.0.0.5 to suspicious-domain.example

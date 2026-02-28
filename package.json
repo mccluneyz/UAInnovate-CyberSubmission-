@@ -1,0 +1,22 @@
+{
+  "name": "soc-attack-narrative-dashboard",
+  "version": "1.0.0",
+  "description": "Web-based SOC dashboard that ingests raw security logs (firewall, authentication, DNS, malware) and turns them into a fast, actionable attack narrative.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "security",
+    "soc",
+    "dashboard",
+    "logs",
+    "node",
+    "express"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
