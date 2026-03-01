@@ -252,8 +252,23 @@ function mapSeverity(raw, type, message) {
   return 'low';
 }
 
-function analyze(events) {
+function analyze(events, fileName) {
   const normalized = normalizeEvents(events);
+
+  if (fileName) {
+    const name = String(fileName).toLowerCase();
+    const typeFromFile =
+      name.includes('dns') ? 'dns' :
+      name.includes('firewall') ? 'firewall' :
+      name.includes('auth') ? 'auth' :
+      name.includes('malware') ? 'malware' :
+      null;
+    if (typeFromFile) {
+      normalized.forEach((e) => {
+        e.type = typeFromFile;
+      });
+    }
+  }
   if (!normalized.length) {
     return {
       summary: {
@@ -458,7 +473,7 @@ function analyze(events) {
 
 app.post('/api/analyze', (req, res) => {
   try {
-    const { events } = req.body || {};
+    const { events, fileName } = req.body || {};
     if (!Array.isArray(events)) {
       return res.status(400).json({
         error:
@@ -466,7 +481,7 @@ app.post('/api/analyze', (req, res) => {
       });
     }
 
-    const result = analyze(events);
+    const result = analyze(events, fileName);
     res.json(result);
   } catch (err) {
     console.error('Error analyzing logs', err);

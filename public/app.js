@@ -1,4 +1,5 @@
 let parsedEvents = [];
+let currentFileName = '';
 let currentTimelineEvents = [];
 let selectedTimelineRow = null;
 
@@ -109,6 +110,7 @@ fileInput.addEventListener('change', () => {
 
   if (!isExcel && !isCsv) {
     parsedEvents = [];
+    currentFileName = '';
     analyzeBtn.disabled = true;
     setStatus('Please select a CSV or Excel (.xlsx) file.', 'error');
     return;
@@ -138,6 +140,7 @@ fileInput.addEventListener('change', () => {
       }
 
       parsedEvents = rows;
+      currentFileName = file.name;
       analyzeBtn.disabled = false;
       setStatus(
         `Loaded ${rows.length} rows from ${file.name}.`,
@@ -146,6 +149,7 @@ fileInput.addEventListener('change', () => {
     } catch (err) {
       console.error('File parse error', err);
       parsedEvents = [];
+      currentFileName = '';
       analyzeBtn.disabled = true;
       setStatus(err.message || 'Error parsing file.', 'error');
     }
@@ -185,7 +189,7 @@ analyzeBtn.addEventListener('click', async () => {
     const res = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ events: parsedEvents })
+      body: JSON.stringify({ events: parsedEvents, fileName: currentFileName })
     });
 
     if (!res.ok) {
@@ -542,7 +546,7 @@ function renderEventDetails(event, row) {
       <span class="event-details-chip">Destination: ${destDisplay}</span>
       <span class="event-details-chip">Port: ${port}</span>
     </div>
-    <div class="event-details-section-title">Raw message</div>
+    <div class="event-details-section-title">Attack Explanation</div>
     <p>${event.message || '(none)'}</p>
     <div class="event-details-section-title">Preventive measures</div>
     <ul class="event-details-list">${measuresHtml}</ul>
@@ -560,36 +564,106 @@ function getPreventiveMeasures(event) {
     items.push(
       'Enable account lockout and throttling for repeated failed logins.',
       'Enforce strong MFA on the affected accounts.',
-      'Review recent login locations and devices for this user.'
+      'Review recent login locations and devices for this user.',
+      'Implement risk-based authentication (RBA) and conditional access policies.',
+      'Review and restrict service accounts with interactive logon rights.',
+      'Audit and reduce accounts with excessive privileges.',
+      'Enable session timeout and concurrent session limits.',
+      'Monitor for anomalous login times and geographic impossible travel.',
+      'Integrate with SIEM for correlation of failed auth across systems.',
+      'Consider passwordless authentication (FIDO2, certificate-based).',
+      'Verify identity through secondary channel before restoring access.',
+      'Apply principle of least privilege for all user and service accounts.',
+      'Enable and tune alerts for brute-force and credential-stuffing patterns.'
     );
     if (severity === 'high' || severity === 'critical') {
       items.push(
-        'Temporarily disable or reset the affected account and require password reset.'
+        'Temporarily disable or reset the affected account and require password reset.',
+        'Force password change and MFA re-enrollment for affected users.',
+        'Escalate to security incident response for potential compromise.'
       );
     }
-  } else if (type.includes('malware')) {
+  } else if (type.includes('malware') || type.includes('alert')) {
     items.push(
-      'Isolate the affected host from the network.',
+      'Isolate the affected host from the network immediately.',
       'Run a full EDR/AV scan and reimage if necessary.',
-      'Block the C2 domain/IP at firewall and secure web gateways.'
+      'Block the C2 domain/IP at firewall and secure web gateways.',
+      'Capture memory and disk images for forensic analysis before remediation.',
+      'Identify and remediate the initial access vector (phishing, exploit, etc.).',
+      'Check for persistence mechanisms (scheduled tasks, registry, startup).',
+      'Scan all hosts in the same VLAN or that communicated with the affected host.',
+      'Update threat intelligence feeds with observed IOCs.',
+      'Block file types commonly used in attacks at email gateway and proxy.',
+      'Ensure EDR is deployed and updated across all endpoints.',
+      'Review and harden application allowlisting policies.',
+      'Validate backups and test recovery procedures.',
+      'Disable or remove unauthorized lateral movement paths (RDP, SMB, etc.).',
+      'Review VPN and remote access logs for the same user or IP.'
     );
   } else if (type.includes('firewall')) {
     items.push(
       'Review firewall rules allowing this traffic and tighten to least privilege.',
-      'Block or geo-restrict the source IP or CIDR if appropriate.'
+      'Block or geo-restrict the source IP or CIDR if appropriate.',
+      'Implement egress filtering to restrict outbound connections to necessary ports only.',
+      'Segment the network to limit lateral movement and blast radius.',
+      'Enable and tune IDS/IPS signatures for similar traffic patterns.',
+      'Consider blocking or alerting on traffic to high-risk countries/regions.',
+      'Document and validate the business justification for any new rule requests.',
+      'Implement micro-segmentation for critical assets.',
+      'Review and remove stale or overly permissive rules.',
+      'Correlate with asset inventory to verify expected behavior.',
+      'Block commonly abused ports (RDP, SSH, SMB) from untrusted sources.',
+      'Enable logging and alerting for policy violations and denied connections.',
+      'Apply rate limiting or throttling for high-volume connections.'
     );
   } else if (type.includes('dns')) {
     items.push(
       'Add the suspicious domain to DNS and proxy blocklists.',
-      'Search DNS logs for other hosts resolving the same domain.'
+      'Search DNS logs for other hosts resolving the same domain.',
+      'Enable DNS over HTTPS (DoH) or secure resolvers with full logging.',
+      'Implement DNS sinkholing for known malicious domains.',
+      'Monitor for DNS query rate anomalies (e.g., fast flux, tunneling).',
+      'Correlate with passive DNS to identify related domains and infrastructure.',
+      'Block or alert on queries to newly registered domains (NRD).',
+      'Review DNS cache poisoning and amplification risks.',
+      'Implement response policy zones (RPZ) for threat intelligence integration.',
+      'Monitor for subdomain enumeration and typosquatting patterns.',
+      'Restrict recursive DNS to internal resolvers only.',
+      'Enable DNSSEC validation where supported.',
+      'Tune alerts for domains with high entropy or algorithmically generated names.',
+      'Review DNS over non-standard ports (e.g., 53 over TCP) for tunneling.'
     );
   }
 
   if (!items.length) {
-    items.push('Monitor for repeated patterns from the same source or user.');
+    items.push(
+      'Monitor for repeated patterns from the same source or user.',
+      'Correlate with other log sources (auth, firewall, DNS) for context.',
+      'Tune detection rules based on false positive analysis.',
+      'Ensure logs are retained and searchable in a central SIEM.'
+    );
   }
 
-  return items;
+  return pickThreeForEvent(items, event);
+}
+
+function pickThreeForEvent(pool, event) {
+  if (pool.length <= 3) return pool;
+  const key = [event.timestamp, event.sourceIp, event.username, event.destIp, event.message, event.destPort].filter(Boolean).join('|');
+  let seed = 0;
+  for (let i = 0; i < key.length; i++) {
+    seed = ((seed << 5) - seed + key.charCodeAt(i)) | 0;
+  }
+  seed = Math.abs(seed);
+  const n = pool.length;
+  const offsets = [1, 317, 733];
+  const indices = new Set();
+  for (let i = 0; i < 3; i++) {
+    let idx = (seed + offsets[i] * (i + 1)) % n;
+    while (indices.has(idx)) idx = (idx + 1) % n;
+    indices.add(idx);
+  }
+  return Array.from(indices).sort((a, b) => a - b).map((i) => pool[i]);
 }
 
 function getSimilarAttacks(event) {

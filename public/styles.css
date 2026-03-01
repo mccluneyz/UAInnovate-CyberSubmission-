@@ -293,7 +293,7 @@ button:disabled {
   overflow: auto;
   border-radius: var(--radius-md);
   border: 1px solid rgba(31, 41, 55, 0.9);
-  background: radial-gradient(circle at top, #020617, #020617);
+  background: #0b1020;
   padding: 8px 10px;
 }
 
@@ -403,7 +403,7 @@ button:disabled {
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: #cbd5f5;
+  color: #ffffff;
 }
 
 .event-details-section-title {
@@ -411,7 +411,7 @@ button:disabled {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #e5e7eb;
+  color: #ffffff;
 }
 
 .event-details-list {
