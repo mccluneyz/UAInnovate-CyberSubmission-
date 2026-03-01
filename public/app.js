@@ -23,6 +23,34 @@ function setStatus(message, type = '') {
   if (type) uploadStatus.classList.add(type);
 }
 
+/** Map a 0–10 score to severity level for color display. */
+function getSeverityFromScore(score) {
+  const s = parseFloat(score) || 0;
+  if (s >= 8) return 'critical';
+  if (s >= 6) return 'high';
+  if (s >= 4) return 'medium';
+  if (s >= 2) return 'low';
+  return 'unknown';
+}
+
+/** Max score allowed for each severity so display stays coherent (critical > high > medium > low). */
+const maxScoreBySeverity = { low: 4, medium: 6, high: 8, critical: 10, unknown: 3 };
+
+/** Effective score for display – capped by campaign severity to avoid 10/10 with low severity. */
+function getEffectiveScore(score, highestSeverity) {
+  const s = parseFloat(score) || 0;
+  const cap = maxScoreBySeverity[(highestSeverity || 'low').toLowerCase()] ?? 7;
+  return Math.min(s, cap, 10);
+}
+
+/** Format score for display (0–10 scale, whole numbers only). Clamps to max 10. */
+function formatScore(score) {
+  const s = parseFloat(score);
+  if (Number.isNaN(s)) return '0';
+  const clamped = Math.min(Math.max(s, 0), 10);
+  return String(Math.round(clamped));
+}
+
 function parseCsv(text) {
   const lines = text
     .split(/\r?\n/)
@@ -241,11 +269,14 @@ function renderAnalysis(data) {
     top === 'unknown' ? 'UNCLASSIFIED' : top.toUpperCase();
 
   if (suspectedCampaigns && suspectedCampaigns.length) {
-    summaryTopCampaign.textContent = `${Math.round(
-      suspectedCampaigns[0].score
-    )} / 100`;
+    const c = suspectedCampaigns[0];
+    const effectiveScore = getEffectiveScore(c.score, c.highestSeverity);
+    const sev = getSeverityFromScore(effectiveScore);
+    summaryTopCampaign.textContent = `${formatScore(effectiveScore)} / 10`;
+    summaryTopCampaign.className = 'value score severity-' + sev;
   } else {
     summaryTopCampaign.textContent = '—';
+    summaryTopCampaign.className = 'value';
   }
 
   renderIndicators(topIndicators || []);
@@ -274,18 +305,25 @@ function renderIndicators(indicators) {
     label.textContent = ind.label;
 
     const chip = document.createElement('div');
-    chip.className = 'chip';
+    chip.className = 'chip chip-score-display';
     if (ind.category === 'authentication') chip.classList.add('auth');
     if (ind.category === 'multi-vector') chip.classList.add('multi-vector');
+    const effectiveScore = ind.highestSeverity
+      ? getEffectiveScore(ind.score ?? 0, ind.highestSeverity)
+      : (ind.score ?? 0);
+    const sev = getSeverityFromScore(effectiveScore);
+    chip.classList.add('severity-' + sev);
 
     const scoreSpan = document.createElement('span');
     scoreSpan.className = 'chip-score';
-    scoreSpan.textContent = Math.round(ind.score ?? 0);
+    scoreSpan.textContent = formatScore(effectiveScore) + ' / 10';
 
     const catSpan = document.createElement('span');
-    catSpan.textContent = (ind.category || '').toUpperCase();
+    catSpan.className = 'chip-category';
+    catSpan.textContent = (ind.category || 'indicator').toUpperCase();
 
     chip.appendChild(scoreSpan);
+    chip.appendChild(document.createTextNode(' · '));
     chip.appendChild(catSpan);
 
     header.appendChild(label);
@@ -317,7 +355,8 @@ function renderCampaigns(campaigns) {
     card.className = 'campaign-card';
 
     const title = document.createElement('div');
-    title.textContent = `Source ${c.sourceIp} (${c.eventCount} events)`;
+    title.className = 'campaign-title';
+    title.textContent = `${c.sourceIp} · ${c.eventCount} events`;
 
     const meta = document.createElement('div');
     meta.className = 'campaign-meta';
@@ -327,55 +366,18 @@ function renderCampaigns(campaigns) {
     if (c.highestSeverity === 'critical') sevPill.classList.add('danger');
     else if (c.highestSeverity === 'high') sevPill.classList.add('warn');
     else sevPill.classList.add('ok');
-    sevPill.textContent = `Severity: ${c.highestSeverity.toUpperCase()}`;
+    sevPill.textContent = c.highestSeverity.toUpperCase();
 
+    const effectiveScore = getEffectiveScore(c.score, c.highestSeverity);
     const scorePill = document.createElement('span');
-    scorePill.className = 'pill danger';
-    scorePill.textContent = `Score: ${Math.round(c.score)}`;
-
-    const durationPill = document.createElement('span');
-    durationPill.className = 'pill';
-    const mins = Math.max(1, Math.round(c.durationMinutes || 1));
-    durationPill.textContent = `Window: ~${mins} min`;
-
-    const usersPill = document.createElement('span');
-    usersPill.className = 'pill';
-    usersPill.textContent = `Users: ${c.userCount}`;
+    scorePill.className = 'pill pill-score severity-' + getSeverityFromScore(effectiveScore);
+    scorePill.textContent = `${formatScore(effectiveScore)}/10`;
 
     meta.appendChild(sevPill);
     meta.appendChild(scorePill);
-    meta.appendChild(durationPill);
-    meta.appendChild(usersPill);
-
-    const eventsDiv = document.createElement('div');
-    eventsDiv.className = 'campaign-events';
-
-    const row1 = document.createElement('div');
-    row1.className = 'campaign-events-row';
-    (c.types || []).forEach((t) => {
-      const b = document.createElement('span');
-      b.className = 'badge';
-      b.textContent = t;
-      row1.appendChild(b);
-    });
-
-    const row2 = document.createElement('div');
-    row2.className = 'campaign-events-row';
-    (c.users || []).forEach((u) => {
-      const b = document.createElement('span');
-      b.className = 'badge';
-      b.textContent = u;
-      row2.appendChild(b);
-    });
-
-    eventsDiv.appendChild(row1);
-    if (c.users && c.users.length) {
-      eventsDiv.appendChild(row2);
-    }
 
     card.appendChild(title);
     card.appendChild(meta);
-    card.appendChild(eventsDiv);
     campaignsList.appendChild(card);
   });
 }

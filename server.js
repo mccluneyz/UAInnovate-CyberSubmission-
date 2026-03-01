@@ -237,15 +237,26 @@ function mapSeverity(raw, type, message) {
     return 'high';
   }
   if (t.includes('firewall')) {
-    if (msg.includes('blocked') || msg.includes('denied')) return 'high';
-    return 'medium';
+    if (msg.includes('blocked') || msg.includes('denied') || msg.includes('dropped')) {
+      const highRiskPort = /\b(3389|22|445|139|135|5985|5986)\b/.test(msg);
+      if (highRiskPort) return 'critical';
+      return 'high';
+    }
+    if (msg.includes('drop') || msg.includes('reject')) return 'medium';
+    return 'low';
   }
-  if (t.includes('auth') || t.includes('login')) {
-    if (msg.includes('failed') || msg.includes('denied')) return 'medium';
+  if (t.includes('network')) {
+    if (msg.includes('scan') || msg.includes('recon') || msg.includes('probe')) return 'high';
+    if (msg.includes('refused') || msg.includes('reset') || msg.includes('suspicious')) return 'medium';
     return 'low';
   }
   if (t.includes('dns')) {
-    if (msg.includes('suspicious') || msg.includes('malicious')) return 'medium';
+    if (msg.includes('malicious') || msg.includes('tunneling') || msg.includes('c2') || msg.includes('command')) return 'high';
+    if (msg.includes('suspicious') || msg.includes('nxdomain') || msg.includes('dga')) return 'medium';
+    return 'low';
+  }
+  if (t.includes('auth') || t.includes('login')) {
+    if (msg.includes('failed') || msg.includes('denied')) return 'medium';
     return 'low';
   }
 
@@ -327,14 +338,14 @@ function analyze(events, fileName) {
       suspiciousAuth.push({
         actor,
         reason: 'Brute-force style pattern (5+ failed logins, no successes)',
-        score: 80
+        score: 8
       });
     } else if (stats.failures >= 3 && stats.successes >= 1) {
       suspiciousAuth.push({
         actor,
         reason:
           'Multiple failed logins followed by success (possible account takeover)',
-        score: 70
+        score: 7
       });
     }
   }
@@ -364,6 +375,25 @@ function analyze(events, fileName) {
     }
   }
 
+  /** Type weights for bonus (firewall > network > dns). */
+  const typeWeight = {
+    firewall: 1,
+    network: 0.6,
+    dns: 0.3,
+    auth: 0.5,
+    alert: 0.8,
+    malware: 0.8,
+    http: 0.2,
+    file: 0.2,
+    email: 0.2,
+    system: 0.4,
+    general: 0.2
+  };
+
+  /** Base score by severity – critical highest, then high, medium, low. Ranges ensure no overlap. */
+  const severityBase = { critical: 9, high: 6, medium: 4, low: 2, unknown: 1 };
+  const maxBonusBySeverity = { critical: 1, high: 2, medium: 2, low: 2, unknown: 2 };
+
   const enrichedCampaigns = campaigns.map((c) => {
     const users = new Set();
     const types = new Set();
@@ -388,14 +418,15 @@ function analyze(events, fileName) {
     const firstEvent = c.events[0];
     const lastEvent = c.events[c.events.length - 1];
 
-    const rank = severityRank[highestSeverity] || 0;
-    const lengthScore = Math.min(c.events.length * 6, 30);
-    const typeScore = Math.min(types.size * 5, 20);
-    const severityScore = (rank / 4) * 50;
-    const score = Math.min(
-      Math.round(lengthScore + typeScore + severityScore),
-      100
-    );
+    const maxTypeWeight = types.size
+      ? Math.max(...Array.from(types).map((t) => typeWeight[t] ?? 0.2))
+      : 0.2;
+    const typeBonus = Math.min(maxTypeWeight, 0.8);
+    const lengthBonus = Math.min(c.events.length * 0.05, 0.5);
+    const bonusCap = maxBonusBySeverity[highestSeverity] ?? 2;
+    const bonus = Math.min(typeBonus + lengthBonus, bonusCap);
+    const base = severityBase[highestSeverity] ?? 2;
+    const score = Math.min(Math.round(base + bonus), 10);
 
     return {
       sourceIp: c.sourceIp,
@@ -440,6 +471,7 @@ function analyze(events, fileName) {
     topIndicators.push({
       label: `Coordinated activity from ${firstCampaign.sourceIp}`,
       score: firstCampaign.score,
+      highestSeverity: firstCampaign.highestSeverity,
       details: `Correlated ${firstCampaign.eventCount} events across ${firstCampaign.types.length} log types over ~${Math.round(
         firstCampaign.durationMinutes || 1
       )} minutes.`,
