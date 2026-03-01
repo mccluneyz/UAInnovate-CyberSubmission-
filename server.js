@@ -4,8 +4,15 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '100mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'File too large. Try a smaller CSV or fewer rows.' });
+  }
+  next(err);
+});
 
 /** Extract destination IP and port from message or other text when not in dedicated fields. */
 function extractDestAndPort(text) {
@@ -512,13 +519,18 @@ app.post('/api/analyze', (req, res) => {
           'Request body must be JSON with an "events" array. Each element should be a log object.'
       });
     }
+    if (events.length > 500000) {
+      return res.status(400).json({
+        error: `Too many rows (${events.length}). Maximum 500,000 events per upload.`
+      });
+    }
 
     const result = analyze(events, fileName);
     res.json(result);
   } catch (err) {
     console.error('Error analyzing logs', err);
     res.status(500).json({
-      error: 'Unexpected error while analyzing logs.'
+      error: err.message || 'Unexpected error while analyzing logs.'
     });
   }
 });

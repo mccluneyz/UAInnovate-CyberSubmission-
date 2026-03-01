@@ -52,7 +52,9 @@ function formatScore(score) {
 }
 
 function parseCsv(text) {
-  const lines = text
+  let t = typeof text === 'string' ? text : String(text);
+  if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1);
+  const lines = t
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
@@ -156,9 +158,17 @@ fileInput.addEventListener('change', () => {
         }
         const data = new Uint8Array(e.target.result);
         rows = parseExcel(data);
-      } else {
-        const text = e.target.result;
-        rows = parseCsv(text);
+  } else {
+    const text = e.target.result;
+    try {
+      rows = parseCsv(text);
+    } catch (parseErr) {
+      parsedEvents = [];
+      currentFileName = '';
+      analyzeBtn.disabled = true;
+      setStatus(parseErr.message || 'Error parsing CSV. Check encoding (use UTF-8) and format.', 'error');
+      return;
+    }
       }
 
       if (!rows.length) {
@@ -192,7 +202,7 @@ fileInput.addEventListener('change', () => {
   if (isExcel) {
     reader.readAsArrayBuffer(file);
   } else {
-    reader.readAsText(file);
+    reader.readAsText(file, 'UTF-8');
   }
 });
 
@@ -213,12 +223,20 @@ analyzeBtn.addEventListener('click', async () => {
   analyzeBtn.disabled = true;
   setStatus('Analyzing logs...');
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 180000);
+
   try {
+    const payload = { events: parsedEvents, fileName: currentFileName };
+    const body = JSON.stringify(payload);
     const res = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ events: parsedEvents, fileName: currentFileName })
+      body,
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -229,8 +247,15 @@ analyzeBtn.addEventListener('click', async () => {
     renderAnalysis(data);
     setStatus('Analysis complete.', 'success');
   } catch (err) {
+    clearTimeout(timeoutId);
     console.error('Analyze error', err);
-    setStatus(err.message || 'Unexpected error analyzing logs.', 'error');
+    let msg = err.message || 'Unexpected error analyzing logs.';
+    if (err.name === 'AbortError') {
+      msg = 'Request timed out. Try a smaller file or fewer rows.';
+    } else if (msg.includes('fetch') || err.name === 'TypeError') {
+      msg = 'Network error. Is the server running? Try a smaller file.';
+    }
+    setStatus(msg, 'error');
   } finally {
     analyzeBtn.disabled = false;
   }
